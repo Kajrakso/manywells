@@ -6,6 +6,8 @@ Date: 2026-07-17
 This file documents changes and additions I made for the rust simulator in additions to benchmarking, convergence tests and general thoughts.
 In addition to this file, it might be useful to look through the notebook `notebook.ipynb`.
 
+The manywells dataset was downloaded and saved locally under `data/`. The script `scripts/save_datasets_local.py` was used to download and store the data.
+
 # Tutorial on how to simulate a well (with rust solver)
 
 1. Read `simulate.md`.
@@ -55,20 +57,6 @@ a NLP solver (CasADi with IPOPT). The rust solver does not setup a NLP, but solv
     3. root finding instead of predictor-corrector for the pressure in the next cell.
     4. fixed point iterations for alpha until convergence instead of 4 iterations.
 2. cl_simulator adds a non zero objective function to the NLP. manywells_rs does not invoke a NLP solver, so this is not supported.
-
-# Data sampling and convergence analysis
-
-TODO: rerun this?
-
-I ran `scripts/data_generation/open_loop_stationary/generate_well_data.py` and used the new rust simulator instead of the old one.
-Below is a comparison of histograms of variables.
-
-![Comparisons of histograms of variables (old versus rust)](./manywells_hist_comparison_old_rs.svg)
-
-Noteworthy is the following:
-
-1. The CHK distribution produced by the rust simulator does not "dip" towards 0% as it did for the old simulator.
-2. The old simulator has a spike around 280K in the TWH distribution. rs does not have this.
 
 # A note on multiple solutions (and simulator failures)
 
@@ -207,6 +195,62 @@ Take a look at this residual plot:
 
 Both the rust simulator and the old one fails in this case.
 
+# Data generation
+
+I duplicated `data_generation/open_loop_stationary/generate_well_data.py` used the new rust simulator instead.
+Since it outputs a list of solutions, the resulting dataset contains additional features: sample_id and solution_number.
+Below are comparisons of histograms of variables.
+
+## sol: Keep only the solutions with the lowest PBH value (includes cases where only 1 solution was found)
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_sol_compare_distributions_lowest_PBH.svg)
+
+## sol: Keep only the solutions with the highest PBH value (includes cases where only 1 solution was found)
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_sol_compare_distributions_highest_PBH.svg)
+
+## sol: Keep only the solutions with the lowest PBH value if 2 solutions were found
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_sol_compare_distributions_lowest_PBH_if_2_sols.svg)
+
+## sol: Keep only the solutions with the highest PBH value if 2 solutions were found
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_sol_compare_distributions_highest_PBH_if_2_sols.svg)
+
+
+## Observations:
+
+1. The old simulator spike around 280K in the TWH distribution. I can reproduce this spike
+by only keeping the solutions with the highest PBH value in the cases where the rust simulator found 2 solutions. This spike disappears if we only keep the lowest PBH solutions.
+
+---
+
+I then generated data using the open loop non stationary script instead.
+
+## nsol: Keep only the solutions with the lowest PBH value (includes cases where only 1 solution was found)
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_nsol_compare_distributions_lowest_PBH.svg)
+
+## nsol: Keep only the solutions with the highest PBH value (includes cases where only 1 solution was found)
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_nsol_compare_distributions_highest_PBH.svg)
+
+## nsol: Keep only the solutions with the lowest PBH value if 2 solutions were found
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_nsol_compare_distributions_lowest_PBH_if_2_sols.svg)
+
+## nsol: Keep only the solutions with the highest PBH value if 2 solutions were found
+
+![Comparisons of histograms of variables (old versus rust)](./manywells_nsol_compare_distributions_highest_PBH_if_2_sols.svg)
+
+
+# Convergence analysis
+
+`scripts/compare_simulators.py` contains a function `run_convergence`.
+Since the new simulator may return multiple solutions,
+it uses the solution with PBH closest to the old simulator.
+ The notebook contains an example run.
+
 # Benchmarking
 
 `scripts/compare_simulators.py` may be ran with the `benchmark` command.
@@ -244,7 +288,7 @@ Also, since the rust project is it's own "thing", having the main `manywells` en
 # How does it compare to the develop branch
 
 I intentionally tailored the new solver to solve the original DAE (differential algebraic equations) from the paper.
-It might or might not be easy to incoorperate additions and modifications of the model into the solver due to:
+It might or might not be easy to incorporate additions and modifications of the model into the solver due to:
 
 1. it is not formulated as an NLP
 2. the temperature profile is integrated analytically over the entire well given the initial condition $T(z=0) = T_r$.
@@ -255,8 +299,6 @@ It might or might not be easy to incoorperate additions and modifications of the
 # Further work / ideas
 
 Just writing down some thoughts:
-
-1. Can we use a DAE solver instead? This would also directly support adding time into the equations.
 
 2. https://www.sintef.no/globalassets/project/co2-dynamics/publications/lund_two-phase_relaxation_hierarchy.pdf
 
